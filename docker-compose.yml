@@ -1,0 +1,56 @@
+services:
+  n8n:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: n8n_app
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_PROTOCOL=http
+      - N8N_SECURE_COOKIE=false
+      - N8N_DISABLE_UI=false
+      - N8N_METRICS=true
+      - N8N_LOG_LEVEL=info
+      - GENERIC_TIMEZONE=Asia/Ho_Chi_Minh
+      - WEBHOOK_URL=http://localhost:5678/
+      - N8N_PERSONALIZATION_ENABLED=true
+      - N8N_VERSION_NOTIFICATIONS_ENABLED=false
+      - N8N_TEMPLATES_ENABLED=true
+      - N8N_PUBLIC_API_DISABLED=false
+      # - N8N_RUNNERS_ENABLED=true
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+
+    ports:
+      - "5678:5678"
+    volumes:
+      - ./data:/home/node/.n8n
+      - /home/duypt/.ssh:/home/node/.ssh:ro
+      - /usr/bin/docker:/usr/local/bin/docker:ro
+      - /usr/libexec/docker/cli-plugins/docker-compose:/usr/libexec/docker/cli-plugins/docker-compose:ro
+      - docker_config:/home/node/.docker
+      - /var/run/docker.sock:/var/run/docker.sock:rw
+      - /var/opt/job/job-backend:/workspace/job-backend:rw
+      - /var/opt/job/job-portal:/workspace/job-portal:rw
+      - /var/opt/job/job-portal-cicd:/workspace/job-portal-cicd:rw
+    networks:
+      - n8n-network   
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5678/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    user: "1000:988"
+
+networks:
+  n8n-network:
+    driver: bridge
+
+volumes:
+  n8n_data:
+    driver: local
+  docker_config:
+    driver: local

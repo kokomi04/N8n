@@ -1,0 +1,178 @@
+## Project Structure
+
+```
+n8n-base/
+├── docker-compose.yml          # N8N service configuration
+├── .env.template               # Environment variables template
+├── .env                       # Environment variables (generated from template)
+├── .gitignore                 # Git ignore rules
+├── setup.sh                   # Project setup script
+├── Makefile                   # Project management commands
+├── data/                      # N8N data storage (git ignored)
+│   └── workflows/             # Workflow files
+├── scripts/                   # Management scripts
+│   ├── deployment/            # Deployment scripts
+│   ├── backup/                # Backup scripts
+│   └── monitoring/            # Monitoring scripts
+└── backup/                    # Backup storage (git ignored)
+```
+
+## Prerequisites
+
+- Docker and Docker Compose installed
+- Git installed
+- Basic knowledge of command line usage
+
+## Installation & Setup
+
+Use the Makefile commands for streamlined setup and management.
+
+1. Clone the repository:
+
+```bash
+git clone <repository-url>
+cd n8n-base
+```
+
+2. Setup the project environment:
+
+```bash
+make setup
+```
+
+3. Configure environment variables:
+
+Edit the `.env` file to update configuration values as needed.
+
+```bash
+nano .env
+```
+
+4. Start N8N services:
+
+```bash
+make start
+```
+
+5. Access N8N:
+
+- URL: http://localhost:5678
+- Username and password as configured in `.env`
+
+## Usage
+
+- Start services: `make start`
+- Stop services: `make stop`
+- Restart services: `make restart`
+- View N8N logs: `make logs`
+- View all services logs: `make logs-all`
+- Check service health: `make health`
+- Show service status: `make status`
+
+## Backup & Restore
+
+- Create backup:
+
+```bash
+make backup
+```
+
+- Restore from backup:
+
+```bash
+make restore BACKUP=<backup_name>
+```
+
+## Deployment
+
+Deploy to production environment:
+
+```bash
+make deploy
+```
+
+## Update & Maintenance
+
+- Update N8N to the latest version:
+
+```bash
+make update
+```
+
+- Clean unused Docker resources:
+
+```bash
+make clean
+```
+
+- Clean all Docker resources including volumes:
+
+```bash
+make clean-all
+```
+
+## Database Management
+
+- Access database shell:
+
+```bash
+make db-shell
+```
+
+- Backup database only:
+
+```bash
+make db-backup
+```
+
+## Security Best Practices
+
+- Change default authentication credentials
+- Generate strong encryption keys (`make generate-keys`)
+- Configure HTTPS/SSL for secure communication
+- Restrict network access to trusted IPs
+- Enable firewall rules
+- Automate backups and monitor logs regularly
+
+## Troubleshooting
+
+### Common Issues
+
+- N8N service fails to start:
+
+```bash
+make logs
+```
+
+- Database connection issues:
+
+```bash
+docker exec postgres_n8n pg_isready -U n8n
+```
+
+- Workflow execution problems:
+
+Check webhook URL configuration, credentials encryption, and logs for errors.
+
+- Performance issues:
+
+Monitor resource usage with:
+
+```bash
+docker stats
+```
+
+Review database performance and workflow complexity.
+
+## Contributing
+
+Contributions are welcome! Please follow these steps:
+
+1. Fork the repository
+2. Create a feature branch
+3. Test your changes thoroughly
+4. Submit a pull request with a detailed description
+
+## License
+
+[Specify your license here]

@@ -1,0 +1,285 @@
+{
+  "name": "Job Portal CI/CD Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "job-portal-webhook",
+        "httpMethod": "POST",
+        "options": {
+          "responseMode": "onReceived",
+          "rawBody": true
+        }
+      },
+      "name": "GitHub Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [200, 400],
+      "webhookId": "job-portal-cicd"
+    },
+    {
+      "parameters": {
+        "jsCode": "const rawBody = JSON.stringify($input.first()?.json?.body);\nconst githubSignature = $input.first()?.json?.headers?.['x-hub-signature-256'] ?? null;\nconst secret = $env.GITHUB_WEBHOOK_SECRET;\nif (!secret) {\n  throw new Error('GITHUB_WEBHOOK_SECRET environment variable is not set');\n}\nreturn { rawBody, githubSignature, secret };"
+      },
+      "name": "Prepare Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, 400]
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "value": "={{$json.rawBody}}",
+        "secret": "={{$json.secret}}",
+        "type": "SHA256",
+        "encoding": "hex"
+      },
+      "name": "Generate HMAC",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [600, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "const generatedSignature = 'sha256=' + $input.first().json.data;\nconst githubSignature = $input.first().json.githubSignature;\nconst isValid = generatedSignature === githubSignature;\nconsole.log('Signature validation:', { isValid, hasGithubSignature: !!githubSignature });\nreturn { isValid, generatedSignature, githubSignature };"
+      },
+      "name": "Compare Signatures",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [800, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.isValid}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "name": "Is Signature Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1000, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $node['Prepare Data'].json.rawBody;\nlet data;\n\ntry {\n  data = JSON.parse(raw);\n} catch {\n  data = $node['GitHub Webhook'].json;\n}\n\nreturn {\n  branchName: data.ref?.replace('refs/heads/', '') || 'main',\n  repository: data.repository?.full_name || 'unknown',\n  commits: data.commits || [],\n  eventType: data.commits ? 'push' : 'unknown'\n};"
+      },
+      "name": "Parse Webhook",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.branchName}}",
+              "value2": "main"
+            }
+          ]
+        }
+      },
+      "name": "Is Main Branch?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1400, 300]
+    },
+    {
+      "parameters": {
+        "command": "=cd /workspace/job-portal && BRANCH_NAME=\"{{$node[\"Parse Webhook\"].json[\"branchName\"]}}\" && git fetch origin && git checkout -B \"$BRANCH_NAME\" origin/\"$BRANCH_NAME\" && git reset --hard origin/\"$BRANCH_NAME\"",
+        "options": {
+          "cwd": "/workspace/job-portal"
+        }
+      },
+      "name": "Git Sync",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [1600, 200]
+    },
+    {
+      "parameters": {
+        "command": "cd /workspace/job-portal && bash deploy_dev.sh",
+        "options": {
+          "cwd": "/workspace/job-portal",
+          "env": {
+            "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+          }
+        }
+      },
+      "name": "Deploy to Production",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [1800, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.SLACK_WEBHOOK_URL}}",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "text",
+              "value": "🚀 Job Portal deployed successfully!\n• Repository: {{$node[\"Parse Webhook\"].json[\"repository\"]}}\n• Branch: {{$node[\"Parse Webhook\"].json[\"branchName\"]}}\n• Event: {{$node[\"Parse Webhook\"].json[\"eventType\"]}}\n• Time: {{new Date().toISOString()}}"
+            }
+          ]
+        }
+      },
+      "name": "Notify Success",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [2000, 200],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.SLACK_WEBHOOK_URL}}",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "text",
+              "value": "❌ Job Portal process failed!\n• Repository: {{$node[\"Parse Webhook\"].json[\"repository\"] || 'N/A'}}\n• Branch: {{$node[\"Parse Webhook\"].json[\"branchName\"] || 'N/A'}}\n• Error: Git or Deployment failed\n• Time: {{new Date().toISOString()}}"
+            }
+          ]
+        }
+      },
+      "name": "Notify Failure",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [2000, 500],
+      "disabled": true
+    }
+  ],
+  "connections": {
+    "GitHub Webhook": {
+      "main": [
+        [
+          {
+            "node": "Prepare Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Data": {
+      "main": [
+        [
+          {
+            "node": "Generate HMAC",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate HMAC": {
+      "main": [
+        [
+          {
+            "node": "Compare Signatures",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compare Signatures": {
+      "main": [
+        [
+          {
+            "node": "Is Signature Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Signature Valid?": {
+      "main": [
+        [
+          {
+            "node": "Parse Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Webhook": {
+      "main": [
+        [
+          {
+            "node": "Is Main Branch?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Main Branch?": {
+      "main": [
+        [
+          {
+            "node": "Git Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Git Sync": {
+      "main": [
+        [
+          {
+            "node": "Deploy to Production",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ],
+      "error": [
+        [
+          {
+            "node": "Notify Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deploy to Production": {
+      "main": [
+        [
+          {
+            "node": "Notify Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ],
+      "error": [
+        [
+          {
+            "node": "Notify Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
